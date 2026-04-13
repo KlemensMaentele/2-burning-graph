@@ -2,8 +2,8 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import random
 from line_profiler_pycharm import profile
-
-best_round = 9999999
+max_round = 4
+best_round = 9999
 best_sequence = []
 checked_sequences = dict()
 
@@ -20,6 +20,17 @@ def draw_graph(G, pos):
     color_map = get_color_map(G)
     nx.draw(G, pos, node_color=color_map, with_labels=True)
     plt.show()
+
+
+
+def burn_in_max_rounds(G, max_round):
+    burned_nodes_set = set()
+    unburned_nodes_list = [i for i in range(len(G.nodes))]  # list of unburned nodes
+    nodes_dict = {i: 0 for i in range(len(G.nodes))}  # dict of unburned nodes
+    unburned_nodes_set = {i for i in range(len(G.nodes))}  # set of unburned nodes
+    pos = nx.spring_layout(G, seed=432)
+    draw_graph(G, pos)
+    rec_alg(G, burned_nodes_set, unburned_nodes_set, unburned_nodes_list, nodes_dict, pos,[], 0, [], 0)
 
 
 @profile
@@ -41,7 +52,7 @@ def do_todo_nodes(G, todo_nodes, burned_nodes_set, unburned_nodes_set, unburned_
     return new_todo_nodes, burned_bitmap
 
 def main():
-    graph_size = 100
+    graph_size = 50
 
     burned_nodes_set = set()
 
@@ -49,7 +60,9 @@ def main():
     nodes_dict = {i: 0 for i in range(graph_size)}  # dict of unburned nodes
     unburned_nodes_set = {i for i in range(graph_size)}  # set of unburned nodes
 
-    G = nx.erdos_renyi_graph(graph_size, 0.2, seed=123, directed=False)
+    #G = nx.erdos_renyi_graph(graph_size, 0.05, seed=131, directed=False)
+    G  = nx.grid_2d_graph(3,3)
+    G = nx.convert_node_labels_to_integers(G)
 
     pos = nx.spring_layout(G, seed=432)
 
@@ -60,7 +73,7 @@ def main():
 
     draw_graph(G,pos)
     rec_alg(G, burned_nodes_set, unburned_nodes_set, unburned_nodes_list, nodes_dict, pos,[], 0, [], 0)
-
+    #rec_smallest_rec(G, burned_nodes_set, unburned_nodes_set, unburned_nodes_list, nodes_dict, pos,[], 0, [], 0)
     nx.set_node_attributes(G, "unburned", "state")
 
     play_sequence(G, best_sequence,pos)
@@ -68,22 +81,6 @@ def main():
 
 @profile
 def rec_alg(G, burned_nodes_set, unburned_nodes_set, unburned_nodes_list, nodes_dict, pos, todo, round, sequence, burned_bitmap):
-    #heuristic to burn the leaf nodes first
-    if(round == 0):
-        for i in range(len(G.nodes)):
-            node = i
-            if G.degree[node] <= 1:
-                sequence.append(node)
-                round=+1
-                nodes_dict[node] = 2
-                unburned_nodes_set.remove(node)
-                unburned_nodes_list.remove(node)
-                burned_nodes_set.add(node)
-                burned_bitmap |= (1 << node)
-                todo.append(node)
-                todo, burned_bitmap = do_todo_nodes(G, todo, burned_nodes_set, unburned_nodes_set, unburned_nodes_list, nodes_dict, burned_bitmap)
-
-
     global best_round
     global checked_sequences
     round += 1
@@ -151,6 +148,10 @@ def play_sequence(G, sequence, pos):
     unburned_nodes_set = {i for i in range(len(G.nodes))}  # set of unburned nodes
     todo = list()
     round = 0
+
+
+
+
     for node_to_burn in sequence:
         round += 1
         print(f"Round {round}")
@@ -176,7 +177,6 @@ def play_sequence(G, sequence, pos):
     nx.set_node_attributes(G, "burned", "state")
     draw_graph(G, pos)
     return
-
 
 if __name__ == "__main__":
     main()
