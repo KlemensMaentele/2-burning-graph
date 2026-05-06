@@ -1,5 +1,6 @@
 import networkx as nx
 import matplotlib.pyplot as plt
+from collections import deque
 
 best_round = 9999999
 best_sequence = []
@@ -12,8 +13,141 @@ list_of_best_sequences = []
 
 
 def main():
-    tree_setup()
+    #tree_setup()
     #petersen_setup()
+    f_tree_setup()
+
+
+
+def f_tree_setup():
+    trees = trees_no_deg2(graph_size)
+    for i in range(3):
+        tree = trees[i]
+        leaves = sum(1 for v in tree.nodes if tree.degree(v) == 1)
+        solving_sequence = tree_solver(tree)
+        print("Solving sequence:", solving_sequence)
+        nx.set_node_attributes(tree, "unburned", "state")
+        #draw_graph(tree, nx.spring_layout(tree))
+        if(len(solving_sequence) == leaves):
+            play_sequence(tree, solving_sequence, nx.spring_layout(tree), True)
+
+
+
+def count_leaves(G):
+    """Return the number of leaves (degree-1 vertices) in graph G."""
+    return sum(1 for v in G.nodes if G.degree(v) == 1)
+
+def closest_cherry(G, start, burned_nodes_set):
+    """
+    Returns the closest cherry to 'start' in tree G.
+    A cherry = two leaves sharing the same neighbor.
+
+    Output: (leaf1, leaf2)
+    or None if no cherry exists.
+    """
+    visited = set([start])
+    queue = deque([start])
+
+    while queue:
+        v = queue.popleft()
+        # Check if v is the center of a cherry
+        leaf_neighbors = [u for u in G.neighbors(v) if G.degree(u) == 1]
+
+        if len(leaf_neighbors) >= 2 and v is not burned_nodes_set and all(u not in burned_nodes_set for u in leaf_neighbors):
+            # Return any pair of leaves (first two)
+            return [leaf_neighbors[0], leaf_neighbors[1]]
+
+        # Continue BFS
+        for u in G.neighbors(v):
+            if u not in visited:
+                visited.add(u)
+                queue.append(u)
+
+    return None
+
+
+def trees_no_deg2(n):
+    return [
+        T for T in nx.nonisomorphic_trees(n)
+        if all(deg != 2 for _, deg in T.degree())
+    ]
+
+# Given a graph G the algorithm works as follows:
+# 1. Pick a random cherry
+# 2. Burn the cherry
+# Now in loop:
+# If a new vertex has been burned via spread (we did not pick) -> check if there is a leaf in distance 2. That has not been burned.
+def tree_solver(G):
+    sequence = []
+    todo, unburned_nodes_list, nodes_dict, unburned_nodes_set, burned_nodes_set = graph_setup()
+    to_burn = closest_cherry(G, 0, burned_nodes_set)
+    print(to_burn)
+    sequence.append(to_burn[0])
+    sequence.append(to_burn[1])
+    burn_one_vertex(G, to_burn[0],burned_nodes_set, unburned_nodes_set, unburned_nodes_list, nodes_dict, todo)
+    burn_one_vertex(G, to_burn[1],burned_nodes_set, unburned_nodes_set, unburned_nodes_list, nodes_dict, todo)
+    the_cherry_dad = list(G[to_burn[0]])[0]
+    print("The dad is:", the_cherry_dad)
+
+
+    todo = burn(G,to_burn, burned_nodes_set, unburned_nodes_set, unburned_nodes_list, nodes_dict, False)  # todo tells us new events
+
+    todo = burn_flamable_path(G, todo, burned_nodes_set, unburned_nodes_set, unburned_nodes_list, nodes_dict, sequence)
+
+
+    cherry = closest_cherry(G, todo[0], burned_nodes_set)
+    if(cherry is None):                # no more cherries
+        unburned_nodes_set_copy = unburned_nodes_set.copy()
+        for vertex in unburned_nodes_set_copy:
+            if(G.degree(vertex) == 1):
+                burn_one_vertex(G,vertex,burned_nodes_set, unburned_nodes_set, unburned_nodes_list, nodes_dict, todo)
+                todo = burn(G, todo, burned_nodes_set, unburned_nodes_set, unburned_nodes_list, nodes_dict,False)# todo tells us new events
+                sequence.append(vertex)
+
+    if(len(unburned_nodes_set) > 0):
+        print("Did not burn everything!! Missing: ", unburned_nodes_set)
+
+    # Either the cherry dad has a connection to an innver vertexsome if not we should be done
+    return sequence
+
+
+
+def burn_flamable_path(G, todo, burned_nodes_set, unburned_nodes_set, unburned_nodes_list, nodes_dict, sequence):
+    to_follow = deque()
+    for vertex in todo:
+        to_follow.extend(leaf_in_dist2(G, vertex, burned_nodes_set))
+
+    while(to_follow):
+        leaf = to_follow.popleft()
+        if(leaf not in burned_nodes_set)and(list(G[leaf])[0] not in burned_nodes_set):
+            sequence.append(leaf)
+            burn_one_vertex(G, leaf, burned_nodes_set, unburned_nodes_set, unburned_nodes_list, nodes_dict, todo)
+            todo = burn(G, todo, burned_nodes_set, unburned_nodes_set, unburned_nodes_list, nodes_dict, False)
+
+            for vertex in todo:
+                to_follow.extend(leaf_in_dist2(G, vertex, burned_nodes_set))
+
+    return todo
+
+
+# only returns one!
+def leaf_in_dist2(G, node, burned_nodes_set):
+    leaves = []
+    for neighbor in G.neighbors(node):
+        if neighbor not in burned_nodes_set:
+            for neighbor_neighbor in G.neighbors(neighbor):
+                if neighbor_neighbor not in burned_nodes_set:
+                    if G.degree(neighbor_neighbor) == 1:
+                        leaves.append(neighbor_neighbor)
+    return leaves
+
+def burn_one_vertex(G, node_to_burn,burned_nodes_set, unburned_nodes_set, unburned_nodes_list, nodes_dict, todo):
+    nodes_dict[node_to_burn] = 2
+    unburned_nodes_set.remove(node_to_burn)
+    unburned_nodes_list.remove(node_to_burn)
+    burned_nodes_set.add(node_to_burn)
+    todo.append(node_to_burn)
+
 
 def petersen_setup():
     global list_of_best_sequences
